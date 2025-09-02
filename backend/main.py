@@ -32,6 +32,7 @@ class Clubs(Base):
     collab = Column(Float, index=True)
     votes = Column(Float, index=True)
     overall = Column(Float, index=True)
+    insta = Column(String, index=True)
 
 Base.metadata.create_all(bind=engine)
 
@@ -87,10 +88,10 @@ async def upload_whatsapp_export(item_id: int, file: UploadFile = File(...)):
 
 # Scrape Instagram Page
 @app.post("/score/ig")
-async def scrape_instagram_id(item_id: int, username:str):
-    score = IGscore(username)
+async def scrape_instagram_id(item_id: int):
     db = SessionLocal()
     db_item = db.query(Clubs).filter(Clubs.id == item_id).first()
+    score = IGscore(db_item.insta)
     db_item.social = score
 
     db_item = db.query(Clubs).filter(Clubs.id == item_id).first()
@@ -109,7 +110,11 @@ async def event_scoring(item_id: int, participant_count: int, collab: bool):
     db = SessionLocal()
     db_item = db.query(Clubs).filter(Clubs.id == item_id).first()
     if collab:
-        db_item.collab += 10 
+        db_item.collab += 0.25 * participant_count
+    
+    # Parity boost for Technical clubs (Since less collaboration chances)
+    if not collab and db_item.tags == "Technical":
+        participant_count *= 1.25
 
     if db_item.events == 0:
         db_item.events = participant_count
@@ -154,9 +159,9 @@ async def club_binning():
 
 # CRUD on the clubs table
 @app.post("/clubs/")
-async def create_item(name: str, tags: str, community: float, social:float, events:float, votes:float, collab:float, overall:float):
+async def create_item(name: str, tags: str, community: float, social:float, events:float, votes:float, collab:float, overall:float, insta: str):
     db = SessionLocal()
-    db_item = Clubs(name=name, tags=tags, community=community, social=social, events=events, votes=votes, collab=collab, overall=overall)
+    db_item = Clubs(name=name, tags=tags, community=community, social=social, events=events, votes=votes, collab=collab, overall=overall, insta=insta)
     db.add(db_item)
     db.commit()
     db.refresh(db_item)
