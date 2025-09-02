@@ -12,6 +12,7 @@ from pathlib import Path
 from datetime import datetime
 from validators import DocumentValidator
 from wa_score import WAscore
+from ig_score import IGscore
 
 # DB config
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
@@ -42,8 +43,9 @@ app = FastAPI()
 # Initialize Document Validator
 doc_validator = DocumentValidator(max_size=25 * 1024 * 1024)
 
+# Import Whatsapp Chat
 @app.post("/upload/wa")
-async def upload_whatsapp_export(item_id:int, file: UploadFile = File(...)):
+async def upload_whatsapp_export(item_id: int, file: UploadFile = File(...)):
     validation = await doc_validator.validate_file(file)
 
     if not validation["valid"]:
@@ -69,47 +71,45 @@ async def upload_whatsapp_export(item_id:int, file: UploadFile = File(...)):
         )
     
     score = WAscore(file_path)
+    db = SessionLocal()
+    db_item = db.query(Clubs).filter(Clubs.id == item_id).first()
+    db_item.community = score
+    db.commit()
 
     return {
         "success": True,
         "score" : score,
     }
 
-@app.post("/upload/ig")
-async def upload_instagram_export(file: UploadFile = File(...)):
-    validation = await doc_validator.validate_file(file)
 
-    if not validation["valid"]:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "message": "File validation failed",
-                "errors": validation["errors"]
-            }
-        )
-
-    file_ext = Path(file.filename).suffix
-    unique_filename = f"{uuid.uuid4()}{file_ext}"
-    file_path = UPLOAD_DIR / unique_filename
-
-    try:
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to save file: {str(e)}"
-        )
+# Scrape Instagram Page
+@app.post("/scrape/ig")
+async def scrape_instagram_id(item_id: int, username:str):
+    score = IGscore(username)
+    db = SessionLocal()
+    db_item = db.query(Clubs).filter(Clubs.id == item_id).first()
+    db_item.social = score
+    db.commit()
 
     return {
         "success": True,
-        "original_filename": file.filename,
-        "stored_filename": unique_filename,
-        "content_type": file.content_type,
-        "size": file.size,
-        "upload_time": datetime.utcnow().isoformat(),
-        "location": str(file_path)
+        "score": score,
     }
+
+
+# Club ranking and clubbing
+@app.get("/ranked")
+async def club_ranking():
+    db = SessionLocal()
+    item = db.query(Clubs).order_by(desc(Clubs.overall))
+    return item.all()
+
+@app.get("/bins")
+async def club_binning():
+    db = SessionLocal()
+    item = db.query(Clubs).order_by(Clubs.tags)
+    return item.all()
+
 
 # CRUD on the clubs table
 @app.post("/clubs/")
@@ -121,11 +121,13 @@ async def create_item(name: str, tags: str, community: float, social:float, even
     db.refresh(db_item)
     return db_item
 
+
 @app.get("/clubs/{item_id}")
 async def read_item(item_id: int):
     db = SessionLocal()
     item = db.query(Clubs).filter(Clubs.id == item_id).first()
     return item
+
 
 @app.put("/clubs/{item_id}")
 async def update_item(item_id: int, name: str, tags: str, community: float, social:float, events:float, votes:float, collab:float, overall:float):
@@ -151,17 +153,6 @@ async def delete_item(item_id: int):
     db.commit()
     return {"message": "Club deleted successfully"}
 
-@app.get("/ranked")
-async def club_ranking():
-    db = SessionLocal()
-    item = db.query(Clubs).order_by(desc(Clubs.overall))
-    return item.all()
-
-@app.get("/bins")
-async def club_ranking():
-    db = SessionLocal()
-    item = db.query(Clubs).order_by(Clubs.tags)
-    return item.all()
 
 @app.get("/")
 async def root():
