@@ -176,7 +176,7 @@ async def read_item(item_id: int):
 
 
 @app.put("/clubs/{item_id}")
-async def update_item(item_id: int, name: str, tags: str, community: float, social:float, events:float, votes:float, collab:float, overall:float):
+async def update_item(item_id: int, name: str, tags: str, community: float, social:float, events:float, votes:float, collab:float, overall:float, insta: str):
     db = SessionLocal()
     db_item = db.query(Clubs).filter(Clubs.id == item_id).first()
     db_item.name = name
@@ -187,6 +187,7 @@ async def update_item(item_id: int, name: str, tags: str, community: float, soci
     db_item.votes = votes
     db_item.collab = collab
     db_item.overall = overall
+    db_item.insta = insta
     db.commit()
     return db_item
 
