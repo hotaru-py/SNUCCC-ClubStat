@@ -44,7 +44,7 @@ app = FastAPI()
 doc_validator = DocumentValidator(max_size=25 * 1024 * 1024)
 
 # Import Whatsapp Chat
-@app.post("/upload/wa")
+@app.post("/score/wa")
 async def upload_whatsapp_export(item_id: int, file: UploadFile = File(...)):
     validation = await doc_validator.validate_file(file)
 
@@ -74,6 +74,9 @@ async def upload_whatsapp_export(item_id: int, file: UploadFile = File(...)):
     db = SessionLocal()
     db_item = db.query(Clubs).filter(Clubs.id == item_id).first()
     db_item.community = score
+
+    db_item = db.query(Clubs).filter(Clubs.id == item_id).first()
+    db_item.overall = db_item.community + db_item.social + db_item.events + db_item.votes + db_item.collab
     db.commit()
 
     return {
@@ -83,12 +86,15 @@ async def upload_whatsapp_export(item_id: int, file: UploadFile = File(...)):
 
 
 # Scrape Instagram Page
-@app.post("/scrape/ig")
+@app.post("/score/ig")
 async def scrape_instagram_id(item_id: int, username:str):
     score = IGscore(username)
     db = SessionLocal()
     db_item = db.query(Clubs).filter(Clubs.id == item_id).first()
     db_item.social = score
+
+    db_item = db.query(Clubs).filter(Clubs.id == item_id).first()
+    db_item.overall = db_item.community + db_item.social + db_item.events + db_item.votes + db_item.collab
     db.commit()
 
     return {
@@ -97,12 +103,37 @@ async def scrape_instagram_id(item_id: int, username:str):
     }
 
 
+# Event Scoring (Add new event)
+@app.put("/score/{item_id}")
+async def event_scoring(item_id: int, participant_count: int, collab: bool):
+    db = SessionLocal()
+    db_item = db.query(Clubs).filter(Clubs.id == item_id).first()
+    if collab:
+        db_item.collab += 10 
+
+    if db_item.events == 0:
+        db_item.events = participant_count
+    else:
+        db_item.events = (db_item.events + participant_count)/2
+
+    db_item = db.query(Clubs).filter(Clubs.id == item_id).first()
+    db_item.overall = db_item.community + db_item.social + db_item.events + db_item.votes + db_item.collab
+    db.commit()
+    return db_item
+
+
 # Voting System
 @app.put("/vote/{item_id}")
 async def club_voting(item_id: int, vote: float):
     db = SessionLocal()
     db_item = db.query(Clubs).filter(Clubs.id == item_id).first()
-    db_item.votes = (db_item.votes + vote)/2
+    if db_item.votes == 0:
+        db_item.votes = vote
+    else:
+        db_item.votes = (db_item.votes + vote)/2
+      
+    db_item = db.query(Clubs).filter(Clubs.id == item_id).first()
+    db_item.overall = db_item.community + db_item.social + db_item.events + db_item.votes + db_item.collab
     db.commit()
     return db_item
 
