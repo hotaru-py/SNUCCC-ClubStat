@@ -7,7 +7,6 @@ class DocumentValidator:
         self.allowed_extensions = {'.pdf', '.txt', '.json'}
 
     async def validate_file(self, file: UploadFile) -> dict:
-        """Check if the document file is valid"""
         result = {"valid": True, "errors": []}
 
         # Check if user selected a file

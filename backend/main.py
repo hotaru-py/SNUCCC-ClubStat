@@ -1,5 +1,5 @@
 import uvicorn
-from sqlalchemy import Column, Integer, String, create_engine, Float
+from sqlalchemy import Column, Integer, String, create_engine, Float, desc
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from fastapi import FastAPI, File, UploadFile, HTTPException
@@ -11,6 +11,7 @@ import uuid
 from pathlib import Path
 from datetime import datetime
 from validators import DocumentValidator
+from wa_score import WAscore
 
 # DB config
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
@@ -38,11 +39,11 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 
 app = FastAPI()
 
-# Upload file validation
+# Initialize Document Validator
 doc_validator = DocumentValidator(max_size=25 * 1024 * 1024)
 
 @app.post("/upload/wa")
-async def upload_whatsapp_export(file: UploadFile = File(...)):
+async def upload_whatsapp_export(item_id:int, file: UploadFile = File(...)):
     validation = await doc_validator.validate_file(file)
 
     if not validation["valid"]:
@@ -66,15 +67,12 @@ async def upload_whatsapp_export(file: UploadFile = File(...)):
             status_code=500,
             detail=f"Failed to save file: {str(e)}"
         )
+    
+    score = WAscore(file_path)
 
     return {
         "success": True,
-        "original_filename": file.filename,
-        "stored_filename": unique_filename,
-        "content_type": file.content_type,
-        "size": file.size,
-        "upload_time": datetime.utcnow().isoformat(),
-        "location": str(file_path)
+        "score" : score,
     }
 
 @app.post("/upload/ig")
@@ -152,6 +150,18 @@ async def delete_item(item_id: int):
     db.delete(db_item)
     db.commit()
     return {"message": "Club deleted successfully"}
+
+@app.get("/ranked")
+async def club_ranking():
+    db = SessionLocal()
+    item = db.query(Clubs).order_by(desc(Clubs.overall))
+    return item.all()
+
+@app.get("/bins")
+async def club_ranking():
+    db = SessionLocal()
+    item = db.query(Clubs).order_by(Clubs.tags)
+    return item.all()
 
 @app.get("/")
 async def root():
