@@ -97,6 +97,16 @@ async def scrape_instagram_id(item_id: int, username:str):
     }
 
 
+# Voting System
+@app.put("/vote/{item_id}")
+async def club_voting(item_id: int, vote: float):
+    db = SessionLocal()
+    db_item = db.query(Clubs).filter(Clubs.id == item_id).first()
+    db_item.votes = (db_item.votes + vote)/2
+    db.commit()
+    return db_item
+
+
 # Club ranking and clubbing
 @app.get("/ranked")
 async def club_ranking():
